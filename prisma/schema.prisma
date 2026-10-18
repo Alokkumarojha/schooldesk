@@ -1,0 +1,112 @@
+// Reviewed SchoolDesk schema. Apply database changes only in a separate step.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+enum NoticeAudience {
+  EVERYONE
+  TEACHERS
+  PARENTS
+  STUDENTS
+}
+
+model Student {
+  id                String             @id @default(cuid())
+  studentId         String             @unique
+  name              String
+  guardianName      String
+  guardianEmail     String?
+  guardianPhone     String
+  status            StudentStatus      @default(ACTIVE)
+  classId           String
+  class             Class              @relation(fields: [classId], references: [id])
+  attendanceRecords AttendanceRecord[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([classId])
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  teacherId String   @unique
+  name      String
+  subject   String
+  email     String   @unique
+  phone     String
+  class     Class?   @relation("ClassTeacher")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Class {
+  id                 String       @id @default(cuid())
+  code               String       @unique
+  name               String
+  room               String
+  capacity           Int
+  students           Student[]
+  attendanceSessions Attendance[]
+  classTeacherId     String?      @unique
+  classTeacher       Teacher?     @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Attendance {
+  id        String             @id @default(cuid())
+  // Store a calendar day so differing times cannot bypass the daily constraint.
+  date      DateTime           @db.Date
+  classId   String
+  class     Class              @relation(fields: [classId], references: [id])
+  records   AttendanceRecord[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([classId, date])
+  @@index([classId])
+}
+
+model AttendanceRecord {
+  id           String           @id @default(cuid())
+  attendanceId String
+  attendance   Attendance       @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student          @relation(fields: [studentId], references: [id])
+  status       AttendanceStatus
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([attendanceId, studentId])
+  @@index([studentId])
+}
+
+model Notice {
+  id        String         @id @default(cuid())
+  title     String
+  body      String
+  audience  NoticeAudience
+  date      DateTime       @default(now())
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([date])
+}

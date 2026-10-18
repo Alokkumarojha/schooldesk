@@ -110,3 +110,86 @@ model Notice {
 
   @@index([date])
 }
+
+
+enum SchoolRole {
+  OWNER
+  ADMIN
+  TEACHER
+  ACCOUNTANT
+  STAFF
+  STUDENT
+  PARENT
+}
+
+enum BoardType {
+  CBSE
+  ICSE
+  STATE_BOARD
+  IB
+  OTHER
+}
+
+model School {
+  id           String         @id @default(cuid())
+  name         String
+  slug         String         @unique
+  code         String?        @unique
+  logoUrl      String?
+
+  // Contact and address
+  email        String?
+  phone        String?
+  addressLine  String?
+  city         String?
+  state        String?
+  pincode      String?
+
+  // Academic configuration
+  board        BoardType?
+  academicYear String?
+
+  // Relations
+  members      SchoolMember[]
+
+  // Status and timestamps
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([city, state])
+}
+
+model User {
+  id        String         @id @default(cuid())
+  clerkId   String         @unique
+  email     String?
+  name      String?
+  phone     String?
+  imageUrl  String?
+
+  // Relations
+  schools   SchoolMember[]
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model SchoolMember {
+  id        String     @id @default(cuid())
+  schoolId  String
+  userId    String
+  role      SchoolRole @default(TEACHER)
+  isActive  Boolean    @default(true)
+
+  // Relations
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // One membership per user per school
+  @@unique([schoolId, userId])
+  @@index([userId])
+}

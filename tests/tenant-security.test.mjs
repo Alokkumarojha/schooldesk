@@ -1121,3 +1121,18 @@ test('photo mutations reject cross-origin requests and client-controlled removal
   assert.equal((await route.DELETE(removal, context('student-a'))).status, 400);
   assert.equal(h.uploaded.length + h.deleted.length, 0); assert.equal(h.state().history.length, 0);
 });
+
+test('photo metadata is authorized, versioned and does not fetch storage or redirect legacy images', async () => {
+  const h = photoHarness(); const route = h.route('students/[id]/photo');
+  for (const reference of [null, 'https://legacy.test/image.jpg', h.managed()]) {
+    h.setPhoto(reference);
+    const req = new Request('https://schooldesk.test/api/students/student-a/photo?metadata=1', { headers: { 'X-School-Id': 'school-a' } });
+    const response = await route.GET(req, context('student-a'));
+    assert.equal(response.status, 200); const body = await response.json();
+    assert.equal(body.photo.imageUrl, reference); assert.equal(body.photo.version, h.version());
+    assert.equal(response.headers.get('ETag'), h.version());
+  }
+  assert.equal(h.downloads.length, 0);
+  const denied = photoHarness({ signedOut: true });
+  assert.equal((await denied.route('students/[id]/photo').GET(new Request('https://schooldesk.test/api/photo?metadata=1', { headers: { 'X-School-Id': 'school-a' } }), context('student-a'))).status, 401);
+});

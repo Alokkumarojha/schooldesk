@@ -18,6 +18,7 @@ import { phoneHref } from '@/lib/management-validation';
 import { Sidebar, Topbar } from './navigation';
 import { Empty, StatusBadge } from './ui';
 import { StudentProfileForm } from './student-profile-form';
+import { useStudentPhoto } from './use-student-photo';
 import { StudentHistoryTimeline } from './student-history-timeline';
 
 const tabs = [
@@ -28,16 +29,12 @@ const tabs = [
   'History',
 ] as const;
 type Tab = (typeof tabs)[number];
-function StudentPhoto({ student }: { student: StudentProfile }) {
+function StudentPhoto({ student, schoolId }: { student: StudentProfile; schoolId: string }) {
   const [failed, setFailed] = useState(false);
-  let safeUrl: string | null = null;
-  try {
-    const url = new URL(student.imageUrl ?? '');
-    if (url.protocol === 'https:' && !url.username && !url.password)
-      safeUrl = url.href;
-  } catch {}
+  const photo = useStudentPhoto(schoolId, student.id, student.imageUrl);
+  const safeUrl = photo.src;
   return (
-    <div className="student-photo">
+    <div><div className="student-photo">
       {safeUrl && !failed ? (
         <Image
           src={safeUrl}
@@ -52,7 +49,7 @@ function StudentPhoto({ student }: { student: StudentProfile }) {
           {initials(student.name) || 'S'}
         </span>
       )}
-    </div>
+    </div>{photo.loading && <span role="status">Loading photo…</span>}{photo.error && <button className="button" onClick={photo.reload}>Retry photo</button>}</div>
   );
 }
 function ProfileDetails({
@@ -75,7 +72,7 @@ function ProfileDetails({
             <dd>{student.studentId}</dd>
           </div>
         )}
-        {section?.fields.map((field) => {
+        {section?.fields.filter(field => field.name !== 'imageUrl').map((field) => {
           const stored = student[field.name];
           const value =
             field.name === 'classId'
@@ -232,6 +229,7 @@ export function StudentProfilePage({
                   <StudentPhoto
                     key={data.student.imageUrl ?? 'initials'}
                     student={data.student}
+                    schoolId={school.id}
                   />
                   <div className="student-profile-heading">
                     <p className="secondary">Student profile</p>
@@ -297,11 +295,12 @@ export function StudentProfilePage({
                   <StudentProfileForm
                     schoolId={school.id}
                     student={data.student}
-                    onClose={() => setEditing(false)}
-                    onSaved={(student) => {
+                    onClose={() => { setEditing(false); setRevision(value => value + 1); setTab('Personal'); }}
+                    onProgress={student => setData(current => current ? { ...current, student } : current)}
+                    onSaved={(student, cleanupPending) => {
                       setData({ ...data, student });
                       setEditing(false);
-                      setSuccess('Student profile saved.');
+                      setSuccess(cleanupPending ? 'Student profile and photo saved. Previous photo cleanup is pending.' : 'Student profile saved.');
                       // Remount the timeline after a successful mutation so it loads new events.
                       setTab('Personal');
                     }}

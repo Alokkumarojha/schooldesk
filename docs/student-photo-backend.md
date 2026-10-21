@@ -1,6 +1,6 @@
 # Student photo backend — Phase 5, Step 2
 
-Backend only. The local picker and Profile Save are deliberately not connected.
+Step 3 now connects the picker and Profile Save; see student-photo-integration.md.
 No live Cloudinary/Neon calls were made during implementation or testing.
 
 ## API contract
@@ -13,6 +13,9 @@ role and the Student's school/class ownership are verified server-side.
   `Cache-Control: private, no-store`, `nosniff` and an ETag. No Cloudinary signed
   URL is returned to the browser. Missing photos return 404 with an ETag, allowing
   an initial upload. Missing/foreign students return 404 without a photo version.
+  `?metadata=1` returns `{ photo: { imageUrl, version } }` under the same access
+  checks, including when imageUrl is null. Browser clients use this mode to obtain
+  versions without following opaque legacy redirects or downloading image bytes.
 - PUT: OWNER/ADMIN only. Send raw image bytes (not multipart or JSON), the image
   Content-Type and `If-Match` containing the current ETag. JPEG, PNG and WebP are
   accepted up to 2,097,152 bytes. The actual format must match the MIME type;
@@ -39,7 +42,7 @@ change, 413 oversized image, 415 unsupported media type, 428 missing If-Match,
 Existing HTTPS photos are unchanged. Authorized photo GET returns a 307 redirect
 to their legacy URL; it never fetches arbitrary URLs server-side. Such legacy
 external photos retain their existing external host's access policy. Follow-up
-UI integration should obtain the ETag without following this redirect. Missing
+UI integration obtains the version via metadata without following this redirect. Missing
 or invalid managed references never fall back to external URLs.
 
 ## Storage and consistency
@@ -88,7 +91,6 @@ forbidden by the test harness.
 
 `sharp` 0.35.5 was already installed transitively through Next.js and is now
 declared directly, with the existing locked artifact retained. No migration,
-schema/environment edit or frontend integration is included. The next UI step
-must load authenticated photo bytes via school-scoped fetch and display a local
-object URL; the existing HTTPS-only component cannot render managed references
-directly.
+schema/environment edit is included. The Step 3 UI loads authenticated photo
+bytes via school-scoped fetch and displays a local object URL; managed references
+are never used directly as image URLs.

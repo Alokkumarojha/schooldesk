@@ -1,17 +1,18 @@
 'use client';
 
 import Image from 'next/image';
+import type { PhotoDraft } from '@/lib/student-photo-client';
 import { useEffect, useId, useRef, useState } from 'react';
 
-// Convenience checks only. The future upload endpoint must validate actual bytes.
+// Convenience checks only. The upload endpoint also validates actual bytes.
 export function photoSelectionError(file: Pick<File, 'type' | 'size'>): string | null {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return 'Choose a JPEG, PNG or WebP image.';
   if (!file.size || file.size > 2 * 1024 * 1024) return 'Choose a non-empty image no larger than 2 MB.';
   return null;
 }
 
-export function StudentPhotoPicker({ imageUrl, disabled, onDraftChange }: {
-  imageUrl: string | null; disabled: boolean; onDraftChange: (changed: boolean) => void;
+export function StudentPhotoPicker({ existingSrc, hasPhoto, disabled, onDraftChange }: {
+  existingSrc: string | null; hasPhoto: boolean; disabled: boolean; onDraftChange: (draft: PhotoDraft) => void;
 }) {
   const id = useId();
   const [preview, setPreview] = useState<string | null>(null);
@@ -26,9 +27,7 @@ export function StudentPhotoPicker({ imageUrl, disabled, onDraftChange }: {
     objectUrl.current = null; setPreview(null);
     if (input.current) input.current.value = '';
   }
-  let existing: string | null = null;
-  try { const url = new URL(imageUrl ?? ''); if (url.protocol === 'https:' && !url.username && !url.password) existing = url.href; } catch {}
-  const src = removed ? null : preview ?? existing;
+  const src = removed ? null : preview ?? existingSrc;
   const changed = !!preview || removed;
   return <div className="field student-photo-picker">
     <label htmlFor={id}>Choose Photo</label>
@@ -44,14 +43,14 @@ export function StudentPhotoPicker({ imageUrl, disabled, onDraftChange }: {
         if (problem) { setError(problem); event.currentTarget.value = ''; return; }
         let url: string;
         try { url = URL.createObjectURL(file); } catch { setError('Unable to preview this image. Try another photo.'); return; }
-        release(); objectUrl.current = url; setPreview(url); setRemoved(false); setFailed(false); setError(''); onDraftChange(true);
+        release(); objectUrl.current = url; setPreview(url); setRemoved(false); setFailed(false); setError(''); onDraftChange({ type: 'upload', file });
       }} />
-    <p id={`${id}-help`} className="form-intro">JPEG, PNG or WebP · maximum 2 MB. Preview only: Cloudinary upload and removal are not connected yet. Your saved photo stays unchanged.</p>
+    <p id={`${id}-help`} className="form-intro">JPEG, PNG or WebP · maximum 2 MB. Photo changes are applied when you save the profile.</p>
     {error && <p id={`${id}-error`} className="field-error" role="alert">{error}</p>}
     <div className="action-group">
-      {src && <button type="button" className="button" disabled={disabled} onClick={() => { release(); setRemoved(true); setError(''); setFailed(false); onDraftChange(true); }}>Remove photo</button>}
-      {changed && <button type="button" className="button" disabled={disabled} onClick={() => { release(); setRemoved(false); setError(''); setFailed(false); onDraftChange(false); }}>Reset photo preview</button>}
+      {(src || (hasPhoto && !removed)) && <button type="button" className="button" disabled={disabled} onClick={() => { release(); setRemoved(true); setError(''); setFailed(false); onDraftChange({ type: 'remove' }); }}>Remove photo</button>}
+      {changed && <button type="button" className="button" disabled={disabled} onClick={() => { release(); setRemoved(false); setError(''); setFailed(false); onDraftChange(null); }}>Reset photo preview</button>}
     </div>
-    {changed && <p role="status" className="form-intro">Photo change is local only. Reset the preview to save other profile details.</p>}
+    {changed && <p role="status" className="form-intro">Unsaved photo change. Save Profile to apply it, or reset to keep the saved photo.</p>}
   </div>;
 }

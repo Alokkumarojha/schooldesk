@@ -28,7 +28,7 @@ function harness() {
   };
   vm.runInNewContext(`(function(require,module,exports){${code}\n})`, { URL: LocalURL })(imports, mod, mod.exports);
   return { ...mod.exports, revoked, changes, cleanup,
-    render() { cursor = 0; refCursor = 0; return mod.exports.StudentPhotoPicker({ imageUrl: 'https://example.test/photo.jpg', disabled: false, onDraftChange: value => changes.push(value) }); },
+    render() { cursor = 0; refCursor = 0; return mod.exports.StudentPhotoPicker({ existingSrc: 'https://example.test/photo.jpg', hasPhoto: true, disabled: false, onDraftChange: value => changes.push(value) }); },
   };
 }
 function nodes(tree) {
@@ -46,15 +46,18 @@ test('picker permits JPEG PNG WebP up to 2 MB and rejects empty/oversized/other 
 });
 test('selection, replacement, removal, reset and unmount release local URLs without uploads', () => {
   const h = harness(); let tree = h.render();
-  select(tree, { type: 'image/png', size: 100 }); tree = h.render();
-  assert.ok(JSON.stringify(tree).includes('blob:local-1')); assert.equal(h.changes.at(-1), true);
+  const selected = { type: 'image/png', size: 100 };
+  select(tree, selected); tree = h.render();
+  assert.ok(JSON.stringify(tree).includes('blob:local-1')); assert.equal(h.changes.at(-1).type, 'upload');
+  assert.equal(h.changes.at(-1).file, selected);
   select(tree, { type: 'image/webp', size: 100 }); tree = h.render();
   assert.deepEqual(h.revoked, ['blob:local-1']);
   button(tree, 'Remove photo').props.onClick(); tree = h.render();
+  assert.equal(h.changes.at(-1).type, 'remove');
   assert.ok(JSON.stringify(tree).includes('Photo removed from preview'));
   assert.deepEqual(h.revoked, ['blob:local-1', 'blob:local-2']);
   button(tree, 'Reset photo preview').props.onClick(); tree = h.render();
-  assert.equal(h.changes.at(-1), false); assert.ok(JSON.stringify(tree).includes('https://example.test/photo.jpg'));
+  assert.equal(h.changes.at(-1), null); assert.ok(JSON.stringify(tree).includes('https://example.test/photo.jpg'));
   select(tree, { type: 'image/jpeg', size: 100 }); h.cleanup[0]();
   assert.equal(h.revoked.at(-1), 'blob:local-3');
 });
@@ -64,9 +67,9 @@ test('invalid selection and cancelled chooser preserve the current image', () =>
   assert.ok(JSON.stringify(tree).includes('https://example.test/photo.jpg'));
   select(tree, null); assert.equal(h.changes.length, 0);
 });
-test('profile form omits imageUrl and blocks submission for a local photo draft', () => {
+test('profile form omits imageUrl and guards photo saves on version readiness', () => {
   const source = readFileSync(new URL('../src/components/student-profile-form.tsx', import.meta.url), 'utf8');
   assert.match(source, /delete raw\.imageUrl/);
-  assert.match(source, /if \(busy.current \|\| loading \|\| classError \|\| photoDraft\) return/);
-  assert.match(source, /disabled=\{pending \|\| loading \|\| !!classError \|\| photoDraft\}/);
+  assert.match(source, /photoDraft && \(photo.loading \|\| !photo.photo \|\| reviewRequired\)/);
+  assert.match(source, /saveProfileWithPhoto/);
 });

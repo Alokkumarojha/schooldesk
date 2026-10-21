@@ -64,8 +64,10 @@ export async function loadStudentProfile(schoolId: string, id: string, signal?: 
   return data;
 }
 export async function updateStudentProfile(schoolId: string, id: string, input: z.infer<typeof studentUpdateSchema>): Promise<StudentProfile> {
+  const payload = { ...input };
+  delete payload.imageUrl;
   const response = await schoolFetch(schoolId, `/api/students/${encodeURIComponent(id)}/`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
   await check(response);
   const data = z.object({ student: studentProfileSchema }).parse(await response.json());

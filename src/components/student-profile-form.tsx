@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import Image from 'next/image';
 import {
   studentUpdateSchema,
   validationFields,
@@ -8,12 +9,13 @@ import {
 import { loadClasses, type StudentClass } from '@/lib/students-client';
 import {
   ProfileRequestError,
-  updateStudentProfile,
   type StudentProfile,
 } from '@/lib/student-profile-client';
 import { humanLabel, profileSections } from '@/lib/student-profile-fields';
 import { Dialog } from './ui';
 import { StudentPhotoPicker } from './student-photo-picker';
+import { useStudentPhoto } from './use-student-photo';
+import { saveProfileWithPhoto, PartialProfileSaveError, PhotoRequestError, type PhotoDraft, type SaveCheckpoint } from '@/lib/student-photo-client';
 
 function limitMobileInput(value: string): string {
   const prefix = value.startsWith('+91') ? '+91' : '';
@@ -29,11 +31,13 @@ export function StudentProfileForm({
   student,
   onClose,
   onSaved,
+  onProgress,
 }: {
   schoolId: string;
   student: StudentProfile;
   onClose: () => void;
-  onSaved: (student: StudentProfile) => void;
+  onSaved: (student: StudentProfile, cleanupPending: boolean) => void;
+  onProgress: (student: StudentProfile) => void;
 }) {
   const prefix = useId();
   const [classes, setClasses] = useState<StudentClass[]>([]);
@@ -44,7 +48,11 @@ export function StudentProfileForm({
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [photoDraft, setPhotoDraft] = useState(false);
+  const [photoDraft, setPhotoDraft] = useState<PhotoDraft>(null);
+  const [reviewRequired, setReviewRequired] = useState(false);
+  const [partial, setPartial] = useState(false);
+  const checkpoint = useRef<SaveCheckpoint | null>(null);
+  const photo = useStudentPhoto(schoolId, student.id, student.imageUrl);
   const [discard, setDiscard] = useState(false);
   const busy = useRef(false);
   const form = useRef<HTMLFormElement>(null);
@@ -90,11 +98,11 @@ export function StudentProfileForm({
   };
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy.current || loading || classError || photoDraft) return;
+    if (busy.current || loading || classError || (photoDraft && (photo.loading || !photo.photo || reviewRequired))) return;
     const raw: Record<string, unknown> = Object.fromEntries(
       new FormData(event.currentTarget)
     );
-    // Step 1 is local-only: never send a preview URL or clear the saved photo.
+    // Photo changes use their dedicated API; blob URLs never enter profile data.
     delete raw.imageUrl;
     if (raw.gender === '') raw.gender = null;
     if (raw.bloodGroup === '') raw.bloodGroup = null;
@@ -117,8 +125,18 @@ export function StudentProfileForm({
     setPending(true);
     setError('');
     try {
-      onSaved(await updateStudentProfile(schoolId, student.id, parsed.data));
+      const result = await saveProfileWithPhoto(schoolId, student.id, parsed.data, photoDraft, photo.photo?.version ?? null, checkpoint.current, value => {
+        checkpoint.current = value;
+        onProgress(value.student);
+      });
+      onSaved(result.student, result.cleanupPending);
     } catch (failure) {
+      if (failure instanceof PartialProfileSaveError) {
+        setPartial(true); setError(failure.message);
+        const cause = failure.cause;
+        setReviewRequired(!(cause instanceof PhotoRequestError) || ![400, 413, 415].includes(cause.status));
+        return;
+      }
       setError(
         failure instanceof ProfileRequestError
           ? failure.message
@@ -156,6 +174,12 @@ export function StudentProfileForm({
           are marked *. Other fields can be cleared.
         </p>
         {loading && <p role="status">Loading class choices…</p>}
+      {partial && <p role="status" className="form-intro">Profile details from the previous attempt are already saved. Closing this form will not undo them. Your selected photo is retained for retry.</p>}
+      {photo.loading && <p role="status">Loading current photo…</p>}
+      {(photo.error || reviewRequired) && <div role="alert"><p>{photo.error || 'Review the latest saved photo before retrying your selected change.'}</p>
+        <button type="button" className="button" disabled={pending || photo.loading} onClick={() => { photo.reload(); setReviewRequired(false); }}>Review current photo</button>
+      </div>}
+      {partial && photo.photo && <div className="form-intro"><p>Current saved photo (your selected change is shown below):</p>{photo.src ? <Image src={photo.src} width={88} height={88} unoptimized alt="Current saved student photo" /> : <p>No saved photo.</p>}</div>}
         {classError && (
           <div role="alert">
             <p>{classError}</p>
@@ -188,7 +212,7 @@ export function StudentProfileForm({
               <legend>{section.title}</legend>
               <div className="student-detail-grid">
                 {section.fields.map((field) => {
-                  if (field.name === 'imageUrl') return <StudentPhotoPicker key={field.name} imageUrl={student.imageUrl} disabled={pending} onDraftChange={changed => { setPhotoDraft(changed); setDirty(true); }} />;
+                  if (field.name === 'imageUrl') return <StudentPhotoPicker key={field.name} existingSrc={photo.src ?? null} hasPhoto={!!photo.photo?.imageUrl} disabled={pending} onDraftChange={draft => { setPhotoDraft(draft); setDirty(true); }} />;
                   const stored = student[field.name];
                   const value = typeof stored === 'string' ? stored : '';
                   const props = {
@@ -313,7 +337,7 @@ export function StudentProfileForm({
             <button
               type="submit"
               className="button primary"
-              disabled={pending || loading || !!classError || photoDraft}
+              disabled={pending || loading || !!classError || (!!photoDraft && (photo.loading || !photo.photo || reviewRequired))}
             >
               {pending ? 'Saving…' : 'Save profile'}
             </button>

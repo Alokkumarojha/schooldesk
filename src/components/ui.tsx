@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useId, useRef } from 'react';
 import { Icon } from './icon';
 import { initials } from '@/lib/demo';
+import type { StudentStatusLabel } from '@/lib/student-status';
 
 export function Dialog({ title, children, onClose, variant = 'form' }: {
   title: string; children: ReactNode; onClose: () => void; variant?: 'form' | 'drawer';
@@ -62,7 +63,7 @@ export function Search({ value, onChange, placeholder }: { value: string; onChan
   </div>;
 }
 
-export function StatusBadge({ status }: { status: 'Active' | 'Inactive' }) {
+export function StatusBadge({ status }: { status: StudentStatusLabel }) {
   return <span className={`badge ${status === 'Active' ? 'green' : ''}`}>{status}</span>;
 }
 

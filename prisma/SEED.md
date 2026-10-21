@@ -1,6 +1,8 @@
 # Development seed
 
-After applying the reviewed migration, run `npm run db:seed` from the project
+Use only a development database. Explicitly set `SEED_SCHOOL_ID` to an existing
+active development School ID in the command environment (no default is used).
+Never run this script against production. Then run `npm run db:seed` from the project
 root. Prisma 7 reads `migrations.seed` in `prisma7.config.ts` and runs
 `jiti prisma/seed.ts`. Jiti is a pinned development dependency for executing
 the TypeScript seed and generated client. No seed runs automatically.
@@ -23,7 +25,8 @@ The source is `src/lib/demo.ts`, imported without modifying that file:
 - Teachers: demo ID becomes unique `teacherId`; details are preserved and
   each teacher is assigned to the demo class through `classTeacherId`.
 - Notices: titles, bodies and audiences are preserved; dates use midnight UTC.
-  Stable primary keys `schooldesk-demo-notice-N1` etc. identify seed notices.
+  School-namespaced stable primary keys identify seed notices; legacy seed IDs
+  are reused only when they already belong to the selected school.
 
 `DEMO-GUARDIAN-SD001` and `DEMO-TEACHER-T01` (and corresponding IDs) are
 intentionally non-dialable, development-only phone placeholders, not contact
@@ -35,7 +38,11 @@ not delete other records. Conflicting unique teacher assignments/emails cause
 the write transaction to roll back rather than removing existing assignments.
 Attendance and AttendanceRecord are only counted, never written.
 
-After committing, the script reads total counts and expects Classes=4,
+All upserts, class assignments and verification queries are scoped to
+`SEED_SCHOOL_ID`. Global fixture ID/code/email conflicts with another school
+abort the transaction instead of reassigning any records.
+
+After committing, the script reads selected-school counts and expects Classes=4,
 Students=12, Teachers=4, Notices=3, Attendance=0, AttendanceRecords=0. If other
 records already exist, it reports the counts and exits unsuccessfully without
 deleting them. Console output never includes credentials or raw driver errors.

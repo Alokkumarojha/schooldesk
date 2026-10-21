@@ -1,4 +1,5 @@
-export type Student = { id: string; name: string; classId: string; guardian: string; email: string; status: 'Active' | 'Inactive' };
+import type { StudentStatusLabel } from './student-status';
+export type Student = { id: string; name: string; classId: string; guardian: string; email: string; status: StudentStatusLabel };
 export type Teacher = { id: string; name: string; subject: string; email: string; classId: string };
 export type SchoolClass = { id: string; name: string; room: string; capacity: number };
 export type Notice = { id: string; title: string; body: string; audience: string; date: string };
@@ -35,7 +36,7 @@ export const initialNotices: Notice[] = [
   {id:'N2',title:'Term assessment preparation',body:'Teachers: review the assessment schedule with your classes and share revision material before Friday.',audience:'Teachers',date:'2026-09-21'},
   {id:'N3',title:'Library reading week',body:'Students can borrow one additional book during reading week. Visit the library during your assigned period.',audience:'Everyone',date:'2026-09-20'},
 ];
-export const sections = ['Dashboard', 'Students', 'Teachers', 'Classes', 'Attendance', 'Notices'] as const;
+export const sections = ['Dashboard', 'Students', 'Teachers', 'Classes', 'Attendance', 'Notices', 'Settings'] as const;
 export type Section = typeof sections[number];
 export const audiences = ['Everyone', 'Teachers', 'Parents', 'Students'] as const;
 export const attendanceStatuses: Mark[] = ['Present', 'Absent', 'Late'];

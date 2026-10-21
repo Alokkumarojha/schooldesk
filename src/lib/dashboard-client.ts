@@ -1,3 +1,4 @@
+import { schoolFetch } from './school-fetch';
 import { validNoticeDate, type ApiNotice } from './notices-client';
 
 export type DashboardData = {
@@ -31,8 +32,8 @@ function isDashboard(value: unknown): value is DashboardData {
       (n.audience === 'EVERYONE' || n.audience === 'TEACHERS' || n.audience === 'PARENTS' || n.audience === 'STUDENTS'));
 }
 
-export async function loadDashboard(signal?: AbortSignal): Promise<DashboardData> {
-  const response = await fetch('/api/dashboard/', { cache: 'no-store', signal });
+export async function loadDashboard(schoolId: string, signal?: AbortSignal): Promise<DashboardData> {
+  const response = await schoolFetch(schoolId, '/api/dashboard/', { cache: 'no-store', signal });
   if (!response.ok) throw new Error('Unable to load dashboard. Please retry.');
   const body: unknown = await response.json();
   if (!isDashboard(body)) throw new Error('Unable to read dashboard. Please retry.');

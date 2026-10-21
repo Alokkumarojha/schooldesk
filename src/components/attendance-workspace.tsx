@@ -8,9 +8,11 @@ import { AttendanceRegister } from './attendance';
 import { Empty } from './ui';
 
 export function AttendanceWorkspace({
+  schoolId,
   active,
   notify,
 }: {
+  schoolId: string;
   active: boolean;
   notify: (message: string) => void;
 }) {
@@ -24,7 +26,7 @@ export function AttendanceWorkspace({
   const [sessionRevision, setSessionRevision] = useState(0);
   const refreshOnVisit = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
-    await loadClasses(signal)
+    await loadClasses(schoolId, signal)
       .then((groups) => {
         if (signal.aborted) return;
         setClasses(groups);
@@ -43,7 +45,7 @@ export function AttendanceWorkspace({
       .finally(() => {
         if (!signal.aborted) setLoading(false);
       });
-  }, []);
+  }, [schoolId]);
   useWorkspaceRefresh(active, protectedDraft, revision, refreshOnVisit);
   return (
     <>
@@ -85,7 +87,7 @@ export function AttendanceWorkspace({
       )}
       <div hidden={loading || !!error}>
         {classId && (
-          <AttendanceRegister
+          <AttendanceRegister schoolId={schoolId}
             key={`${classId}/${date}`}
             refreshRevision={sessionRevision}
             onProtectionChange={setProtectedDraft}

@@ -1,3 +1,4 @@
+import { schoolFetch } from './school-fetch';
 import type { Notice } from './demo';
 
 export type NoticeAudience = 'EVERYONE' | 'TEACHERS' | 'PARENTS' | 'STUDENTS';
@@ -26,16 +27,16 @@ function isNotice(value: unknown): value is ApiNotice {
     typeof value.date === 'string' && validNoticeDate(value.date) &&
     (value.audience === 'EVERYONE' || value.audience === 'TEACHERS' || value.audience === 'PARENTS' || value.audience === 'STUDENTS');
 }
-export async function loadNotices(signal?: AbortSignal): Promise<ApiNotice[]> {
-  const response = await fetch('/api/notices/', { cache: 'no-store', signal });
+export async function loadNotices(schoolId: string, signal?: AbortSignal): Promise<ApiNotice[]> {
+  const response = await schoolFetch(schoolId, '/api/notices/', { cache: 'no-store', signal });
   if (!response.ok) throw new Error('Unable to load notices. Please retry.');
   const body: unknown = await response.json();
   if (!object(body) || !Array.isArray(body.notices) || !body.notices.every(isNotice)) throw new Error('Unable to read notices. Please retry.');
   return body.notices;
 }
 export class NoticeRequestError extends Error {}
-export async function mutateNotice(method: 'POST' | 'PUT' | 'DELETE', id?: string, input?: NoticeInput): Promise<void> {
-  const response = await fetch(id ? `/api/notices/${encodeURIComponent(id)}/` : '/api/notices/', {
+export async function mutateNotice(schoolId: string, method: 'POST' | 'PUT' | 'DELETE', id?: string, input?: NoticeInput): Promise<void> {
+  const response = await schoolFetch(schoolId, id ? `/api/notices/${encodeURIComponent(id)}/` : '/api/notices/', {
     method, headers: { 'Content-Type': 'application/json' }, ...(input ? { body: JSON.stringify(input) } : {}),
   });
   if (!response.ok) throw new NoticeRequestError(response.status === 404 ? 'This notice is no longer available. Reload the notices list.'

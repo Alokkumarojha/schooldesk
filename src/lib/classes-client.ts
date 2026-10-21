@@ -1,3 +1,4 @@
+import { schoolFetch } from './school-fetch';
 import { loadTeacherWorkspace, type TeacherClass } from './teachers-client';
 
 export type DatabaseClass = TeacherClass & { studentCount: number };
@@ -6,9 +7,9 @@ export class ClassRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export async function loadClassWorkspace(signal?: AbortSignal) {
+export async function loadClassWorkspace(schoolId: string, signal?: AbortSignal) {
   // Reuse the validated, no-store teachers/classes loader without changing its consumers.
-  const data = await loadTeacherWorkspace(signal);
+  const data = await loadTeacherWorkspace(schoolId, signal);
   const classes: DatabaseClass[] = data.classes.map(group => {
     if (!('studentCount' in group) || typeof group.studentCount !== 'number' || !Number.isInteger(group.studentCount) || group.studentCount < 0) {
       throw new Error('Invalid class count.');
@@ -18,8 +19,8 @@ export async function loadClassWorkspace(signal?: AbortSignal) {
   return { classes, teachers: data.teachers };
 }
 
-export async function mutateClass(method: 'POST' | 'PUT' | 'DELETE', id?: string, input?: ClassInput): Promise<void> {
-  const response = await fetch(id ? `/api/classes/${encodeURIComponent(id)}/` : '/api/classes/', {
+export async function mutateClass(schoolId: string, method: 'POST' | 'PUT' | 'DELETE', id?: string, input?: ClassInput): Promise<void> {
+  const response = await schoolFetch(schoolId, id ? `/api/classes/${encodeURIComponent(id)}/` : '/api/classes/', {
     method, headers: { 'Content-Type': 'application/json' }, ...(input ? { body: JSON.stringify(input) } : {}),
   });
   if (!response.ok) throw new ClassRequestError(response.status === 409

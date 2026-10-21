@@ -1,11 +1,13 @@
+import { schoolFetch } from './school-fetch';
 import type { Mark } from './demo';
+import { isStudentStatus, type StudentStatus } from './student-status';
 
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
 export type AttendanceStudent = {
   id: string;
   studentId: string;
   name: string;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: StudentStatus;
 };
 export type AttendanceRecord = {
   id: string;
@@ -88,7 +90,7 @@ function isStudent(value: unknown): value is AttendanceStudent {
     ['id', 'studentId', 'name'].every(
       (key) => typeof value[key] === 'string'
     ) &&
-    (value.status === 'ACTIVE' || value.status === 'INACTIVE')
+    isStudentStatus(value.status)
   );
 }
 function isSession(
@@ -109,12 +111,11 @@ function isSession(
       value.records.length
   );
 }
-export async function loadAttendance(
-  classId: string,
+export async function loadAttendance(schoolId: string, classId: string,
   date: string,
   signal?: AbortSignal
 ): Promise<AttendanceResponse> {
-  const response = await fetch(
+  const response = await schoolFetch(schoolId,
     `/api/attendance/?${new URLSearchParams({ classId, date })}`,
     { cache: 'no-store', signal }
   );
@@ -145,10 +146,9 @@ export async function loadAttendance(
   }
   return { attendance: body.attendance, students: body.students };
 }
-export async function saveAttendance(
-  input: AttendanceInput
+export async function saveAttendance(schoolId: string, input: AttendanceInput
 ): Promise<AttendanceSession> {
-  const response = await fetch('/api/attendance/', {
+  const response = await schoolFetch(schoolId, '/api/attendance/', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),

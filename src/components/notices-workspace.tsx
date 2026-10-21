@@ -9,7 +9,8 @@ import { RecordForm } from './record-form';
 import { Dialog, Empty } from './ui';
 import { Icon } from './icon';
 
-export function NoticesWorkspace({ active, form, onEdit, onClose, notify, onCount }: {
+export function NoticesWorkspace({ schoolId, active, form, onEdit, onClose, notify, onCount }: {
+  schoolId: string;
   active: boolean;
   form: Extract<FormTarget, { kind: 'notice' }> | null; onEdit: (notice: Notice) => void; onClose: () => void;
   notify: (message: string) => void; onCount: (count: number) => void;
@@ -24,19 +25,19 @@ export function NoticesWorkspace({ active, form, onEdit, onClose, notify, onCoun
   const busy = useRef(false);
   const refreshOnVisit = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
-    await loadNotices(signal).then(records => { if (!signal.aborted) { setNotices(records); onCount(records.length); setLoadError(''); } })
+    await loadNotices(schoolId, signal).then(records => { if (!signal.aborted) { setNotices(records); onCount(records.length); setLoadError(''); } })
       .catch(() => { if (!signal.aborted) setLoadError('Unable to load notices. Check your connection and try again.'); })
       .finally(() => { if (!signal.aborted) setLoading(false); });
-  }, [onCount]);
+  }, [onCount, schoolId]);
   useWorkspaceRefresh(active, pending || !!deleting || (!!form && !loading), revision, refreshOnVisit);
   const close = () => { if (!busy.current) { setError(''); onClose(); } };
-  async function change(method: 'POST' | 'PUT' | 'DELETE', id?: string, input?: Parameters<typeof mutateNotice>[2]) {
+  async function change(method: 'POST' | 'PUT' | 'DELETE', id?: string, input?: Parameters<typeof mutateNotice>[3]) {
     if (busy.current || loading || loadError) return;
     busy.current = true; setPending(true); setError('');
     try {
-      await mutateNotice(method, id, input);
+      await mutateNotice(schoolId, method, id, input);
       onClose(); setDeleting(null);
-      try { const records = await loadNotices(); setNotices(records); onCount(records.length); }
+      try { const records = await loadNotices(schoolId); setNotices(records); onCount(records.length); }
       catch { setLoadError('Changes were saved, but notices could not be refreshed. Please retry.'); }
       notify(`Notice ${method === 'POST' ? 'added' : method === 'PUT' ? 'updated' : 'deleted'} successfully.`);
     } catch (failure) { setError(failure instanceof NoticeRequestError ? failure.message : 'Unable to save changes. Check your connection and try again.'); }

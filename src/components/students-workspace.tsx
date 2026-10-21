@@ -16,8 +16,10 @@ import {
 import { Students } from './management';
 import { RecordForm } from './record-form';
 import { Dialog, Empty } from './ui';
+import { statusFromLabel } from '@/lib/student-status';
 
 type Props = {
+  schoolId: string;
   active: boolean;
   initialClass: string;
   revision: number;
@@ -28,6 +30,7 @@ type Props = {
 };
 
 export function StudentsWorkspace({
+  schoolId,
   active,
   initialClass,
   revision,
@@ -51,7 +54,7 @@ export function StudentsWorkspace({
 
   const refreshOnVisit = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
-    await Promise.all([loadStudents(signal), loadClasses(signal)])
+    await Promise.all([loadStudents(schoolId, signal), loadClasses(schoolId, signal)])
       .then(([students, classes]) => {
         if (signal.aborted) return;
         setData({ students, classes });
@@ -66,7 +69,7 @@ export function StudentsWorkspace({
       .finally(() => {
         if (!signal.aborted) setLoading(false);
       });
-  }, []);
+  }, [schoolId]);
   useWorkspaceRefresh(
     active,
     pending || !!deleting || (!!form && !loading),
@@ -99,7 +102,7 @@ export function StudentsWorkspace({
 
   async function refreshCapacity() {
     try {
-      const classes = await loadClasses(new AbortController().signal);
+      const classes = await loadClasses(schoolId, new AbortController().signal);
       setData((previous) => ({ ...previous, classes }));
     } catch {
       setLoadError(
@@ -111,6 +114,8 @@ export function StudentsWorkspace({
   async function save(submission: RecordSubmission, phone?: string) {
     if (submission.kind !== 'student' || busy.current || loading || loadError)
       return;
+    const status = statusFromLabel(submission.data.status);
+    if (!status) { setSaveError('Choose a valid student status.'); return; }
     const group = data.classes.find(
       (group) => group.code === submission.data.classId
     );
@@ -124,14 +129,13 @@ export function StudentsWorkspace({
     setPending(true);
     setSaveError('');
     try {
-      const saved = await saveStudent(
-        {
+      const saved = await saveStudent(schoolId, {
           name: submission.data.name,
           classId: group.id,
           guardianName: submission.data.guardian,
           guardianEmail: submission.data.email || undefined,
           guardianPhone: phone ?? '',
-          status: submission.data.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
+          status,
         },
         form?.existing?.id
       );
@@ -163,7 +167,7 @@ export function StudentsWorkspace({
     setPending(true);
     setDeleteError('');
     try {
-      await deleteStudent(deleting.id);
+      await deleteStudent(schoolId, deleting.id);
       setData((previous) => ({
         ...previous,
         students: previous.students.filter(

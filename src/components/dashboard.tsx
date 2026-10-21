@@ -2,13 +2,14 @@
 
 import { type Section, formatDate } from '@/lib/demo';
 import type { DashboardData } from '@/lib/dashboard-client';
+import { academicSessionLabel } from '@/lib/school-settings';
 import { noticeRow } from '@/lib/notices-client';
 import { Icon } from './icon';
 import { Empty, Person, StatusBadge, TableRegion } from './ui';
 import { NoticeContent } from './management';
 
-export function Dashboard({ dashboard, onNavigate }: {
-  dashboard: DashboardData; onNavigate: (section: Section) => void;
+export function Dashboard({ dashboard, academicYear, onNavigate }: {
+  dashboard: DashboardData; academicYear: string | null; onNavigate: (section: Section) => void;
 }) {
   const enrolment = dashboard.enrolment.classes;
   const maxEnrolled = Math.max(1, ...enrolment.map(group => group.activeStudentCount));
@@ -39,7 +40,7 @@ export function Dashboard({ dashboard, onNavigate }: {
             <div className="enrolment-chart">{enrolment.map(group => <div className="bar-row" key={group.id}><span>{group.name}</span>
               <progress max={maxEnrolled} value={group.activeStudentCount} aria-label={`${group.name}: ${group.activeStudentCount} active students`} /><strong>{group.activeStudentCount}</strong>
             </div>)}</div>
-            <div className="legend"><span><i aria-hidden="true" />Active enrolment</span><span>Academic session 2026–27</span></div>
+            <div className="legend"><span><i aria-hidden="true" />Active enrolment</span><span>Academic session: {academicSessionLabel(academicYear)}</span></div>
           </div>
         </section>
         <section className="panel"><div className="panel-head"><div><h2>Student directory</h2><p>A quick look at your school roster</p></div><button className="link" onClick={() => onNavigate('Students')}>View students<Icon name="arrow" size={15} /></button></div>

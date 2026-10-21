@@ -16,6 +16,7 @@ import { RecordForm } from './record-form';
 import { Dialog, Empty } from './ui';
 
 type Props = {
+  schoolId: string;
   active: boolean;
   form: Extract<FormTarget, { kind: 'teacher' }> | null;
   onEdit: (teacher: Teacher) => void;
@@ -23,6 +24,7 @@ type Props = {
   notify: (message: string) => void;
 };
 export function TeachersWorkspace({
+  schoolId,
   active,
   form,
   onEdit,
@@ -42,7 +44,7 @@ export function TeachersWorkspace({
   const busy = useRef(false);
   const refreshOnVisit = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
-    await loadTeacherWorkspace(signal)
+    await loadTeacherWorkspace(schoolId, signal)
       .then((result) => {
         if (!signal.aborted) {
           setData(result);
@@ -58,7 +60,7 @@ export function TeachersWorkspace({
       .finally(() => {
         if (!signal.aborted) setLoading(false);
       });
-  }, []);
+  }, [schoolId]);
   useWorkspaceRefresh(
     active,
     pending || !!deleting || (!!form && !loading),
@@ -86,7 +88,7 @@ export function TeachersWorkspace({
   const rows = data.teachers.map(teacherRow);
   async function refresh() {
     try {
-      setData(await loadTeacherWorkspace());
+      setData(await loadTeacherWorkspace(schoolId));
       setLoadError('');
     } catch {
       setLoadError(
@@ -97,14 +99,14 @@ export function TeachersWorkspace({
   async function change(
     method: 'POST' | 'PUT' | 'DELETE',
     id?: string,
-    input?: Parameters<typeof mutateTeacher>[2]
+    input?: Parameters<typeof mutateTeacher>[3]
   ) {
     if (busy.current || loading || loadError) return;
     busy.current = true;
     setPending(true);
     setError('');
     try {
-      await mutateTeacher(method, id, input);
+      await mutateTeacher(schoolId, method, id, input);
       onClose();
       setDeleting(null);
       await refresh();

@@ -14,6 +14,8 @@ const audienceMap: Record<string, NoticeAudience> = {
 };
 
 async function seed() {
+  const schoolId = process.env.SEED_SCHOOL_ID?.trim();
+  if (!schoolId) throw new Error('Explicit SEED_SCHOOL_ID is required.');
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString?.trim()) throw new Error('DATABASE_URL is required.');
   if (process.env.NODE_ENV === 'production') throw new Error('Demo seeding is development-only.');
@@ -21,11 +23,12 @@ async function seed() {
   const prisma = new PrismaClient({ adapter: new PrismaNeon({ connectionString }), log: [] });
   try {
     await prisma.$transaction(async tx => {
+      if (!await tx.school.findUnique({ where: { id: schoolId, isActive: true }, select: { id: true } })) throw new Error('Selected seed school must exist and be active.');
       const classIds = new Map<string, string>();
       for (const group of classes) {
-        const data = { name: group.name, room: group.room, capacity: group.capacity };
+        const data = { schoolId, name: group.name, room: group.room, capacity: group.capacity };
         const record = await tx.class.upsert({
-          where: { code: group.id },
+          where: { code: group.id, schoolId },
           create: { code: group.id, ...data },
           update: data,
         });
@@ -39,6 +42,7 @@ async function seed() {
 
       for (const student of initialStudents) {
         const data = {
+          schoolId,
           name: student.name,
           guardianName: student.guardian,
           guardianEmail: student.email,
@@ -48,7 +52,7 @@ async function seed() {
           classId: getClassId(student.classId),
         };
         await tx.student.upsert({
-          where: { studentId: student.id },
+          where: { studentId: student.id, schoolId },
           create: { studentId: student.id, ...data },
           update: data,
         });
@@ -59,18 +63,19 @@ async function seed() {
         if (assignedClasses.has(teacher.classId)) throw new Error('Demo assigns multiple teachers to one class.');
         assignedClasses.add(teacher.classId);
         const data = {
+          schoolId,
           name: teacher.name,
           subject: teacher.subject,
           email: teacher.email,
           phone: `DEMO-TEACHER-${teacher.id}`,
         };
         const record = await tx.teacher.upsert({
-          where: { teacherId: teacher.id },
+          where: { teacherId: teacher.id, schoolId },
           create: { teacherId: teacher.id, ...data },
           update: data,
         });
         await tx.class.update({
-          where: { id: getClassId(teacher.classId) },
+          where: { id: getClassId(teacher.classId), schoolId },
           data: { classTeacherId: record.id },
         });
       }
@@ -79,6 +84,7 @@ async function seed() {
         const audience = audienceMap[notice.audience];
         if (!audience) throw new Error('Unknown demo notice audience.');
         const data = {
+          schoolId,
           title: notice.title,
           body: notice.body,
           audience,
@@ -86,14 +92,16 @@ async function seed() {
         };
         // Notice has no natural unique key. A namespaced seed ID avoids duplicates
         // even when titles change, without changing the Prisma schema.
-        const id = `schooldesk-demo-notice-${notice.id}`;
-        await tx.notice.upsert({ where: { id }, create: { id, ...data }, update: data });
+        const legacyId = `schooldesk-demo-notice-${notice.id}`;
+        const legacy = await tx.notice.findUnique({ where: { id: legacyId, schoolId }, select: { id: true } });
+        const id = legacy?.id ?? `schooldesk-demo-${schoolId}-notice-${notice.id}`;
+        await tx.notice.upsert({ where: { id, schoolId }, create: { id, ...data }, update: data });
       }
     }, { maxWait: 10000, timeout: 60000 });
 
     const [classCount, students, teachers, notices, attendance, attendanceRecords] = await prisma.$transaction([
-      prisma.class.count(), prisma.student.count(), prisma.teacher.count(),
-      prisma.notice.count(), prisma.attendance.count(), prisma.attendanceRecord.count(),
+      prisma.class.count({ where: { schoolId } }), prisma.student.count({ where: { schoolId } }), prisma.teacher.count({ where: { schoolId } }),
+      prisma.notice.count({ where: { schoolId } }), prisma.attendance.count({ where: { schoolId } }), prisma.attendanceRecord.count({ where: { attendance: { schoolId } } }),
     ]);
     const counts = { Classes: classCount, Students: students, Teachers: teachers, Notices: notices, Attendance: attendance, AttendanceRecords: attendanceRecords };
     console.log('Database counts:', JSON.stringify(counts));
@@ -101,7 +109,7 @@ async function seed() {
       throw new Error('Counts differ from the initial demo target; existing records were not deleted.');
     }
     const assignments = await prisma.class.findMany({
-      where: { code: { in: classes.map(group => group.id) } },
+      where: { schoolId, code: { in: classes.map(group => group.id) } },
       select: { code: true, classTeacher: { select: { teacherId: true, name: true } } },
       orderBy: { code: 'asc' },
     });

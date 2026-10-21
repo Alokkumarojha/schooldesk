@@ -14,10 +14,12 @@ import { ClassForm } from './class-form';
 import { Dialog, Empty } from './ui';
 
 export function ClassesWorkspace({
+  schoolId,
   active,
   onRoster,
   notify,
 }: {
+  schoolId: string;
   active: boolean;
   onRoster: (code: string) => void;
   notify: (message: string) => void;
@@ -35,7 +37,7 @@ export function ClassesWorkspace({
   const busy = useRef(false);
   const refreshOnVisit = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
-    await loadClassWorkspace(signal)
+    await loadClassWorkspace(schoolId, signal)
       .then((result) => {
         if (!signal.aborted) {
           setData(result);
@@ -51,7 +53,7 @@ export function ClassesWorkspace({
       .finally(() => {
         if (!signal.aborted) setLoading(false);
       });
-  }, []);
+  }, [schoolId]);
   useWorkspaceRefresh(
     active,
     pending || !!form || !!deleting,
@@ -65,7 +67,7 @@ export function ClassesWorkspace({
   };
   async function refresh() {
     try {
-      setData(await loadClassWorkspace());
+      setData(await loadClassWorkspace(schoolId));
       setLoadError('');
     } catch {
       setLoadError(
@@ -96,7 +98,7 @@ export function ClassesWorkspace({
     setPending(true);
     setError('');
     try {
-      await mutateClass(method, id, input);
+      await mutateClass(schoolId, method, id, input);
       setForm(null);
       setDeleting(null);
       await refresh();

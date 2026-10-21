@@ -3,6 +3,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import type { ClassInput, DatabaseClass } from '@/lib/classes-client';
 import type { ApiTeacher } from '@/lib/teachers-client';
+import { classUpdateSchema, validationFields } from '@/lib/management-validation';
 import { Dialog } from './ui';
 
 export function ClassForm({ existing, teachers, pending, blocked, error, onClose, onSave }: {
@@ -24,19 +25,16 @@ export function ClassForm({ existing, teachers, pending, blocked, error, onClose
     if (pending || blocked) return;
     const data = new FormData(event.currentTarget);
     const get = (name: string) => String(data.get(name) ?? '').trim();
-    const next: Record<string, string> = {};
-    for (const [name, max] of [['code', 40], ['name', 100], ['room', 80]] as const) {
-      if (!get(name) || get(name).length > max) next[name] = `Enter a value of at most ${max} characters.`;
-    }
-    const capacity = Number(get('capacity'));
-    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 1000) next.capacity = 'Enter a whole number from 1 to 1000.';
+    const parsed = classUpdateSchema.safeParse({ code: get('code'), name: get('name'), room: get('room'), capacity: Number(get('capacity')), classTeacherId: safeTeacherId || null });
+    const next = parsed.success ? {} : validationFields(parsed.error);
+    if (parsed.success && existing && parsed.data.capacity < existing.studentCount) next.capacity = 'Capacity cannot be lower than the current number of students.';
     setFields(next);
     if (Object.keys(next).length) {
       const element = event.currentTarget.elements.namedItem(Object.keys(next)[0]);
       if (element instanceof HTMLElement) element.focus();
       return;
     }
-    onSave({ code: get('code'), name: get('name'), room: get('room'), capacity, classTeacherId: safeTeacherId || null });
+    if (parsed.success) onSave(parsed.data);
   }
   return <Dialog title={existing ? 'Edit class' : 'Add class'} onClose={close}>
     <form className="form" ref={formRef} noValidate onSubmit={submit} onChange={event => {

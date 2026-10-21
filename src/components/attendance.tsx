@@ -7,7 +7,8 @@ import { attendanceInput, attendanceMarks, loadAttendance, saveAttendance, valid
 import { Dialog, Empty, Person, TableRegion } from './ui';
 import { Icon } from './icon';
 
-export function AttendanceRegister({ classes, classId, date, onClassChange, onDateChange, notify, refreshRevision, onProtectionChange }: {
+export function AttendanceRegister({ schoolId, classes, classId, date, onClassChange, onDateChange, notify, refreshRevision, onProtectionChange }: {
+  schoolId: string;
   refreshRevision: number; onProtectionChange: (protectedDraft: boolean) => void;
   classes: ApiClass[]; classId: string; date: string; onClassChange: (id: string) => void; onDateChange: (date: string) => void;
   notify: (message: string) => void;
@@ -30,7 +31,7 @@ export function AttendanceRegister({ classes, classId, date, onClassChange, onDa
     void Promise.resolve().then(() => {
       if (controller.signal.aborted) return;
       setLoading(true);
-      return loadAttendance(classId, date, controller.signal);
+      return loadAttendance(schoolId, classId, date, controller.signal);
     }).then(result => {
       if (!result) return;
       if (controller.signal.aborted) return;
@@ -38,7 +39,7 @@ export function AttendanceRegister({ classes, classId, date, onClassChange, onDa
     }).catch(() => { if (!controller.signal.aborted) setLoadError('Unable to load attendance. Check your connection and retry.'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [classId, date, validDate, revision, refreshRevision]);
+  }, [schoolId, classId, date, validDate, revision, refreshRevision]);
   const marks = draft ?? baseline;
   const roster = data?.students ?? [];
   const dirty = roster.some(student => marks[student.id] !== baseline[student.id]);
@@ -51,7 +52,7 @@ export function AttendanceRegister({ classes, classId, date, onClassChange, onDa
     if (!canSave || busy.current) return;
     busy.current = true; setPending(true); setSaveError('');
     try {
-      const session = await saveAttendance(attendanceInput(classId, date, roster, marks));
+      const session = await saveAttendance(schoolId, attendanceInput(classId, date, roster, marks));
       setData(previous => previous ? { ...previous, attendance: session } : previous);
       setBaseline(attendanceMarks(session)); setDraft(null);
       notify('Attendance saved successfully.');

@@ -13,6 +13,31 @@ datasource db {
 enum StudentStatus {
   ACTIVE
   INACTIVE
+  GRADUATED
+  SUSPENDED
+  TRANSFERRED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum LogType {
+  ADMISSION
+  PROMOTION
+  SECTION_CHANGE
+  STATUS_CHANGE
+  TRANSFER
+  ACADEMIC_REMARK
+  FEE_RECORD
+  PROFILE_UPDATED
+  CLASS_CHANGED
+  LOGIN_LINKED
+  LOGIN_UNLINKED
+  BASELINE_IMPORTED
 }
 
 enum AttendanceStatus {
@@ -29,20 +54,83 @@ enum NoticeAudience {
 }
 
 model Student {
-  id                String             @id @default(cuid())
-  studentId         String             @unique
-  name              String
-  guardianName      String
-  guardianEmail     String?
-  guardianPhone     String
-  status            StudentStatus      @default(ACTIVE)
-  classId           String
-  class             Class              @relation(fields: [classId], references: [id])
-  attendanceRecords AttendanceRecord[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                     String             @id @default(cuid())
+  studentId              String             @unique
+  name                   String
+  // Nullable additions preserve existing records; name remains the display name.
+  firstName              String?
+  middleName             String?
+  lastName               String?
+  gender                 Gender?
+  dateOfBirth            DateTime?          @db.Date
+  bloodGroup             String?
+  imageUrl               String?
+  admissionDate          DateTime?          @db.Date
+  rollNumber             String?
+  academicYear           String?
+  guardianName           String
+  guardianEmail          String?
+  guardianPhone          String
+  guardianRelation       String?
+  alternateGuardianPhone String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  state                  String?
+  pincode                String?
+  country                String?
+  status                 StudentStatus      @default(ACTIVE)
+  classId                String
+  class                  Class              @relation(fields: [classId], references: [id])
+  attendanceRecords      AttendanceRecord[]
+  history                StudentHistory[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  schoolId               String
+  school                 School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
+  @@unique([schoolId, id])
   @@index([classId])
+}
+
+// Append-only via the future service layer; no update/delete service is implied.
+model StudentHistory {
+  id        String @id @default(cuid())
+  schoolId  String
+  // Internal Student.id, not the public SDxxx identifier.
+  studentId String
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  logType     LogType
+  title       String
+  description String?
+
+  // Snapshot-only IDs: future services verify school ownership when recording
+  // the event. No Class FK, so history survives class renames and deletion.
+  fromClassId           String?
+  toClassId             String?
+  fromClassNameSnapshot String?
+  toClassNameSnapshot   String?
+  fromClassCodeSnapshot String?
+  toClassCodeSnapshot   String?
+  fromStatus            StudentStatus?
+  toStatus              StudentStatus?
+  academicYear          String?
+  studentIdSnapshot     String
+  studentNameSnapshot   String
+
+  // Internal User.id, verified through the same-school membership.
+  // Null is reserved for explicitly authorized system/baseline events.
+  createdById String?
+  createdBy   SchoolMember? @relation("StudentHistoryCreator", fields: [schoolId, createdById], references: [schoolId, userId], onDelete: Restrict, onUpdate: Restrict)
+  createdAt   DateTime      @default(now())
+
+  @@index([schoolId, studentId, createdAt, id])
+  @@index([schoolId, fromClassId])
+  @@index([schoolId, toClassId])
+  @@index([schoolId, createdById])
 }
 
 model Teacher {
@@ -55,6 +143,8 @@ model Teacher {
   class     Class?   @relation("ClassTeacher")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 }
 
 model Class {
@@ -69,6 +159,8 @@ model Class {
   classTeacher       Teacher?     @relation("ClassTeacher", fields: [classTeacherId], references: [id])
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  schoolId           String
+  school             School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 }
 
 model Attendance {
@@ -80,6 +172,8 @@ model Attendance {
   records   AttendanceRecord[]
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
+  schoolId  String
+  school    School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
   @@unique([classId, date])
   @@index([classId])
@@ -107,10 +201,11 @@ model Notice {
   date      DateTime       @default(now())
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  schoolId  String
+  school    School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
   @@index([date])
 }
-
 
 enum SchoolRole {
   OWNER
@@ -131,63 +226,71 @@ enum BoardType {
 }
 
 model School {
-  id           String         @id @default(cuid())
-  name         String
-  slug         String         @unique
-  code         String?        @unique
-  logoUrl      String?
+  id      String  @id @default(cuid())
+  name    String
+  slug    String  @unique
+  code    String? @unique
+  logoUrl String?
 
   // Contact and address
-  email        String?
-  phone        String?
-  addressLine  String?
-  city         String?
-  state        String?
-  pincode      String?
+  email       String?
+  phone       String?
+  addressLine String?
+  city        String?
+  state       String?
+  pincode     String?
 
   // Academic configuration
   board        BoardType?
   academicYear String?
 
   // Relations
-  members      SchoolMember[]
+  // Relations
+  members            SchoolMember[]
+  students           Student[]
+  teachers           Teacher[]
+  classes            Class[]
+  attendanceSessions Attendance[]
+  notices            Notice[]
+  studentHistory     StudentHistory[]
 
   // Status and timestamps
-  isActive     Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([city, state])
 }
 
 model User {
-  id        String         @id @default(cuid())
-  clerkId   String         @unique
-  email     String?
-  name      String?
-  phone     String?
-  imageUrl  String?
+  id       String  @id @default(cuid())
+  clerkId  String  @unique
+  email    String?
+  name     String?
+  phone    String?
+  imageUrl String?
 
   // Relations
-  schools   SchoolMember[]
+  schools SchoolMember[]
 
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model SchoolMember {
-  id        String     @id @default(cuid())
-  schoolId  String
-  userId    String
-  role      SchoolRole @default(TEACHER)
-  isActive  Boolean    @default(true)
+  id                    String           @id @default(cuid())
+  schoolId              String
+  userId                String
+  role                  SchoolRole       @default(TEACHER)
+  isActive              Boolean          @default(true)
+  studentHistoryCreated StudentHistory[] @relation("StudentHistoryCreator")
 
   // Relations
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // One membership per user per school
   @@unique([schoolId, userId])

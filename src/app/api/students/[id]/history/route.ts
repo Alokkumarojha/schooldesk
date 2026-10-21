@@ -12,7 +12,7 @@ const pagination = z.object({
 });
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  return withSchoolAccess(request, 'read', async ({ schoolId }) => {
+  return withSchoolAccess(request, 'read', async ({ schoolId, role }) => {
     const search = new URL(request.url).searchParams;
     const parsed = pagination.safeParse({ limit: search.get('limit') ?? undefined, cursor: search.get('cursor') ?? undefined });
     if (!parsed.success) return Response.json({ error: 'Invalid history pagination.' }, { status: 400, headers });
@@ -36,7 +36,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limit + 1,
           select: {
-            id: true, studentId: true, logType: true, title: true, description: true,
+            id: true, studentId: true, logType: true, title: true, description: true, remarkCategory: true,
             fromClassId: true, toClassId: true, fromClassNameSnapshot: true, toClassNameSnapshot: true,
             fromClassCodeSnapshot: true, toClassCodeSnapshot: true, fromStatus: true, toStatus: true,
             academicYear: true, studentIdSnapshot: true, studentNameSnapshot: true,
@@ -48,7 +48,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           ...event,
           creator: createdBy ? { name: createdBy.user.name, role: createdBy.role } : null,
         }));
-        return Response.json({ history, limit, nextCursor: rows.length > limit ? history[history.length - 1].id : null }, { status: 200, headers });
+        return Response.json({ history, permissions: { canAddRemark: role === 'OWNER' || role === 'ADMIN' }, limit, nextCursor: rows.length > limit ? history[history.length - 1].id : null }, { status: 200, headers });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     } catch (error) {
       return databaseFailure(error) ?? Response.json({ error: 'Unable to load student history. Please try again.' }, { status: 500, headers });

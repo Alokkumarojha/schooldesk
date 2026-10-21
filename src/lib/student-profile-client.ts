@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { remarkSchema, type RemarkInput } from './student-remarks';
 import { schoolFetch } from './school-fetch';
 import { studentStatuses } from './student-status';
 import { studentUpdateSchema } from './management-validation';
@@ -19,7 +20,7 @@ export const studentProfileSchema = z.object({
 export type StudentProfile = z.infer<typeof studentProfileSchema>;
 const profileEnvelope = z.object({
   student: studentProfileSchema,
-  permissions: z.object({ canEdit: z.boolean(), canAddRemark: z.literal(false) }),
+  permissions: z.object({ canEdit: z.boolean(), canAddRemark: z.boolean() }),
 });
 export type ProfileData = z.infer<typeof profileEnvelope>;
 export const historyEventSchema = z.object({
@@ -31,11 +32,11 @@ export const historyEventSchema = z.object({
   academicYear: nullableText, studentIdSnapshot: z.string(), studentNameSnapshot: z.string(),
   createdById: nullableText, createdAt: z.string().datetime(),
   creator: z.object({ name: nullableText, role: z.string() }).nullable().optional(),
-  // Read support only; the current database cannot yet persist categories.
+  // Null for legacy history; optional for compatibility with older responses.
   remarkCategory: z.enum(['POSITIVE', 'NEEDS_IMPROVEMENT', 'GENERAL']).nullable().optional(),
 });
 export type HistoryEvent = z.infer<typeof historyEventSchema>;
-const historyPage = z.object({ history: z.array(historyEventSchema), limit: z.number().int(), nextCursor: nullableText });
+const historyPage = z.object({ history: z.array(historyEventSchema), limit: z.number().int(), nextCursor: nullableText, permissions: z.object({ canAddRemark: z.boolean() }).optional() });
 export type HistoryPage = z.infer<typeof historyPage>;
 
 export class ProfileRequestError extends Error {
@@ -81,4 +82,14 @@ export async function loadStudentHistory(schoolId: string, id: string, cursor?: 
   const data = historyPage.parse(await response.json());
   if (data.history.some(event => event.studentId !== id)) throw new Error('Unexpected history response.');
   return data;
+}
+
+export async function saveStudentRemark(schoolId: string, id: string, input: RemarkInput, requestKey: string): Promise<string> {
+  const response = await schoolFetch(schoolId, '/api/students/' + encodeURIComponent(id) + '/remarks/', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestKey },
+    body: JSON.stringify(remarkSchema.parse(input)),
+  });
+  if (response.status === 409) throw new ProfileRequestError('This request conflicts with an earlier save. Reload history before creating another remark.');
+  await check(response);
+  return z.object({ remark: z.object({ id: z.string() }) }).parse(await response.json()).remark.id;
 }

@@ -25,6 +25,12 @@ enum Gender {
   PREFER_NOT_TO_SAY
 }
 
+enum RemarkCategory {
+  POSITIVE
+  NEEDS_IMPROVEMENT
+  GENERAL
+}
+
 enum LogType {
   ADMISSION
   PROMOTION
@@ -103,9 +109,10 @@ model StudentHistory {
   school  School  @relation(fields: [schoolId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict, onUpdate: Restrict)
 
-  logType     LogType
-  title       String
-  description String?
+  logType        LogType
+  title          String
+  description    String?
+  remarkCategory RemarkCategory?
 
   // Snapshot-only IDs: future services verify school ownership when recording
   // the event. No Class FK, so history survives class renames and deletion.

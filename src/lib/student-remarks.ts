@@ -8,4 +8,4 @@ export const remarkSchema = z.object({
   category: z.enum(['POSITIVE', 'NEEDS_IMPROVEMENT', 'GENERAL']),
   description: z.string().trim().min(1, 'Enter a description.').max(3000),
 }).strict();
-export const remarkUnavailableMessage = 'Saving remarks is awaiting the approved category storage update. Nothing will be saved.';
+export type RemarkInput = z.infer<typeof remarkSchema>;

@@ -21,7 +21,7 @@ export async function GET(request: Request, context: Context) {
       if (!student) return notFound();
       return Response.json({
         student: studentResponse(student),
-        permissions: { canEdit: role === 'OWNER' || role === 'ADMIN', canAddRemark: false },
+        permissions: { canEdit: role === 'OWNER' || role === 'ADMIN', canAddRemark: role === 'OWNER' || role === 'ADMIN' },
       }, { status: 200, headers });
     } catch (error) {
       return databaseFailure(error) ?? Response.json({ error: 'Unable to load student profile.' }, { status: 500, headers });

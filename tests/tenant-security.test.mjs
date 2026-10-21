@@ -144,30 +144,12 @@ function harness(options = {}, models = {}) {
 }
 function request(method, body, school = 'school-a', extraHeaders = {}, query = '') {
   return new Request(`https://schooldesk.test/api/test${query}`, {
-    method, headers: { ...(school === null ? {} : { 'X-School-Id': school }), ...extraHeaders },
+    method, headers: { ...(school === null ? {} : { 'X-School-Id': school }), 'Idempotency-Key': 'd53738ac-40e4-4c4e-8cab-7ef63b7e8737', ...extraHeaders },
     ...(method !== 'GET' && method !== 'DELETE' ? { body: JSON.stringify(body ?? {}) } : {}),
   });
 }
 const context = id => ({ params: Promise.resolve({ id }) });
 const remarkInput = { title: 'Synthetic remark', category: 'POSITIVE', description: 'Synthetic description' };
-
-test('remark preflight validates and scopes requests but cannot write categoryless history', async () => {
-  for (const role of ['OWNER', 'ADMIN']) {
-    const h = harness({ role }, { student: { findUnique: ({ where }) => {
-      assert.equal(where.schoolId, 'school-a'); assert.equal(where.class.schoolId, 'school-a');
-      return where.id === 'student-a' ? { id: 'student-a' } : null;
-    } } });
-    const post = h.route('students/[id]/remarks').POST;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await post(request('POST', remarkInput), context('student-a'));
-      assert.equal(response.status, 501);
-      assert.equal((await response.json()).code, 'REMARK_STORAGE_NOT_READY');
-    }
-    assert.equal((await post(request('POST', remarkInput), context('foreign-id'))).status, 404);
-    assert.ok(h.calls.every(call => call.model === 'student' && call.method === 'findUnique'));
-    assert.equal(h.transactions.length, 0);
-  }
-});
 
 test('remark payloads reject invalid categories, lengths and forged audit fields before record access', async () => {
   const h = harness(); const post = h.route('students/[id]/remarks').POST;
@@ -207,7 +189,7 @@ test('single student GET scopes reads and returns explicit edit permissions', as
     const data = await response.json();
     assert.equal(data.student.status, 'GRADUATED');
     assert.equal(data.permissions.canEdit, ['OWNER', 'ADMIN'].includes(role));
-    assert.equal(data.permissions.canAddRemark, false);
+    assert.equal(data.permissions.canAddRemark, ['OWNER', 'ADMIN'].includes(role));
     assert.equal((await get(request('GET'), context('foreign-id'))).status, 404);
   }
 });
@@ -1135,4 +1117,88 @@ test('photo metadata is authorized, versioned and does not fetch storage or redi
   assert.equal(h.downloads.length, 0);
   const denied = photoHarness({ signedOut: true });
   assert.equal((await denied.route('students/[id]/photo').GET(new Request('https://schooldesk.test/api/photo?metadata=1', { headers: { 'X-School-Id': 'school-a' } }), context('student-a'))).status, 401);
+});
+
+function remarkHarness(options = {}) {
+  let rows = [];
+  let creates = 0;
+  const h = harness({ ...options, snapshot: () => [...rows], rollback: value => { rows = value; } }, {
+    student: { findUnique: ({ where }) => {
+      assert.equal(where.schoolId, 'school-a'); assert.equal(where.class.schoolId, 'school-a');
+      return where.id === 'student-a' ? { ...studentInput, id: 'student-a', studentId: 'SD001', class: studentClass, academicYear: '2026-2027' } : null;
+    } },
+    studentHistory: {
+      findFirst: ({ where }) => {
+        assert.equal(where.schoolId, 'school-a'); assert.equal(where.studentId, 'student-a'); assert.equal(where.createdById, 'user-a');
+        return rows.find(row => row.id === where.id) ?? null;
+      },
+      create: ({ data }) => {
+        creates++;
+        if (options.concurrent && creates === 1) throw new KnownError('P2002');
+        rows.push(data);
+        if (options.failWrite) throw new Error('PRIVATE write error');
+        return { id: data.id };
+      },
+    },
+  });
+  return { ...h, rows: () => rows, post: (input = remarkInput, id = 'student-a', headers = {}) => h.route('students/[id]/remarks').POST(request('POST', input, 'school-a', headers), context(id)) };
+}
+test('remarks persist all categories with verified snapshots and append-only retry identity', async () => {
+  for (const role of ['OWNER', 'ADMIN']) for (const category of ['POSITIVE', 'NEEDS_IMPROVEMENT', 'GENERAL']) {
+    const h = remarkHarness({ role }); const input = { ...remarkInput, category };
+    const first = await h.post(input); assert.equal(first.status, 201);
+    const result = await first.json();
+    const repeat = await h.post(input); assert.equal(repeat.status, 200);
+    assert.equal((await repeat.json()).remark.id, result.remark.id);
+    assert.equal(h.rows().length, 1);
+    const row = h.rows()[0];
+    assert.equal(row.remarkCategory, category); assert.equal(row.logType, 'ACADEMIC_REMARK');
+    assert.equal(row.schoolId, 'school-a'); assert.equal(row.studentId, 'student-a'); assert.equal(row.createdById, 'user-a');
+    assert.equal(row.studentIdSnapshot, 'SD001'); assert.equal(row.studentNameSnapshot, studentInput.name);
+    assert.equal(row.fromClassNameSnapshot, studentClass.name); assert.equal(row.toClassCodeSnapshot, '6a');
+    assert.equal(row.academicYear, '2026-2027');
+    assert.equal((await h.post({ ...input, title: 'Different payload' })).status, 409);
+    assert.equal(h.rows().length, 1);
+    assert.ok(h.calls.every(call => !['update', 'updateMany', 'delete'].includes(call.method)));
+    assert.deepEqual(Object.keys(h.route('students/[id]/remarks')).sort(), ['POST', 'dynamic', 'runtime']);
+  }
+});
+test('remark retries recover serialization/unique conflicts and failures roll back', async () => {
+  for (const options of [{ retry: true }, { concurrent: true }]) {
+    const h = remarkHarness(options); assert.equal((await h.post()).status, 201);
+    assert.equal(h.rows().length, 1); assert.equal(h.transactions.length, 2);
+  }
+  const failed = remarkHarness({ failWrite: true });
+  const result = await failed.post(); assert.equal(result.status, 500);
+  assert.doesNotMatch(await result.text(), /PRIVATE/); assert.equal(failed.rows().length, 0);
+});
+test('remarks reject signed-out, inactive, unauthorized, cross-school and revoked access', async () => {
+  for (const [options, status] of [
+    [{ signedOut: true }, 401], [{ memberActive: false }, 403], [{ schoolActive: false }, 403],
+    [{ noMember: true }, 403], [{ role: 'TEACHER' }, 403], [{ role: 'STAFF' }, 403],
+    [{ revokeInTransaction: true }, 403],
+  ]) {
+    const h = remarkHarness(options); assert.equal((await h.post()).status, status); assert.equal(h.rows().length, 0);
+  }
+  const h = remarkHarness(); assert.equal((await h.post(remarkInput, 'foreign-student')).status, 404);
+  assert.equal((await h.route('students/[id]/remarks').POST(request('POST', remarkInput, 'school-b'), context('student-a'))).status, 403);
+  assert.equal((await h.post(remarkInput, 'student-a', { 'Idempotency-Key': '' })).status, 400);
+  assert.equal((await h.post({ ...remarkInput, studentId: 'foreign' })).status, 400);
+  assert.equal(h.rows().length, 0);
+});
+test('remark client sends a scoped request and retains the supplied key across retries', async () => {
+  const calls = [];
+  const h = harness({ fetch: async (url, init) => {
+    calls.push({ url, init });
+    return Response.json({ remark: { id: 'saved-event' } }, { status: calls.length === 1 ? 201 : 200 });
+  } });
+  const client = h.client('student-profile-client');
+  for (let i = 0; i < 2; i++) assert.equal(await client.saveStudentRemark('school-a', 'student-a', remarkInput, 'retry-key'), 'saved-event');
+  assert.equal(calls.length, 2);
+  for (const { url, init } of calls) {
+    assert.equal(url, '/api/students/student-a/remarks/');
+    assert.equal(new Headers(init.headers).get('X-School-Id'), 'school-a');
+    assert.equal(new Headers(init.headers).get('Idempotency-Key'), 'retry-key');
+    assert.deepEqual(JSON.parse(init.body), remarkInput);
+  }
 });

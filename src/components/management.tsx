@@ -97,7 +97,9 @@ export function Students({
             }}
           >
             <option value="">All statuses</option>
-            {studentStatuses.map(status => <option key={status}>{studentStatusLabels[status]}</option>)}
+            {studentStatuses.map((status) => (
+              <option key={status}>{studentStatusLabels[status]}</option>
+            ))}
           </select>
           {filtered && (
             <button className="button quiet" onClick={clearFilters}>
@@ -124,6 +126,101 @@ export function Students({
           </button>
         </div>
       )}
+
+      <div className="student-mobile-cards">
+        {visible.map((student, index) => (
+          <article className="student-mobile-card" key={student.id}>
+            <div className="student-mobile-card-header">
+              <Person
+                name={student.name}
+                id={student.studentId ?? student.id}
+                index={index}
+              />
+              <StatusBadge status={student.status} />
+            </div>
+
+            <div className="student-mobile-details">
+              <div>
+                <span>Class</span>
+                <strong>
+                  {student.className ?? className(student.classId)}
+                </strong>
+              </div>
+              <div>
+                <span>Guardian</span>
+                <strong>{student.guardian}</strong>
+                {student.guardianPhone && (
+                  <small>{student.guardianPhone}</small>
+                )}
+                {student.email && <small>{student.email}</small>}
+              </div>
+            </div>
+
+            <div className="student-mobile-actions">
+              {phoneHref(student.guardianPhone) && (
+                <a
+                  href={phoneHref(student.guardianPhone) ?? undefined}
+                  className="button small"
+                  aria-label={`Call ${student.guardian}'s guardian phone`}
+                >
+                  <Icon name="phone" size={16} />
+                  Call
+                </a>
+              )}
+
+              <button
+                className="button small"
+                aria-label={`Edit ${student.name}`}
+                onClick={() => onEdit(student)}
+              >
+                <Icon name="edit" size={16} />
+                Edit
+              </button>
+
+              {onDelete && (
+                <button
+                  className="iconbutton destructive"
+                  aria-label={`Delete ${student.name}`}
+                  onClick={() => onDelete(student)}
+                >
+                  <Icon name="trash" size={18} />
+                </button>
+              )}
+            </div>
+
+            <a
+              className="button student-mobile-profile"
+              href={`/students/${encodeURIComponent(student.id)}`}
+              aria-label={`View profile for ${student.name}`}
+            >
+              View Profile
+            </a>
+          </article>
+        ))}
+
+        {!matching.length && (
+          <Empty
+            title={
+              students.length
+                ? 'No students match your filters'
+                : 'No students yet'
+            }
+            body={
+              students.length
+                ? 'Try another name, class or status.'
+                : 'Use Add student to create the first record.'
+            }
+            action={
+              filtered && (
+                <button className="button" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              )
+            }
+          />
+        )}
+      </div>
+
       <TableRegion label="Student records" className="responsive-table">
         <table>
           <caption className="sr-only">
@@ -180,7 +277,13 @@ export function Students({
                 </td>
                 <td className="row-action">
                   <div className="action-group">
-                    <a className="button small" href={`/students/${encodeURIComponent(student.id)}`} aria-label={`View profile for ${student.name}`}>View profile</a>
+                    <a
+                      className="button small"
+                      href={`/students/${encodeURIComponent(student.id)}`}
+                      aria-label={`View profile for ${student.name}`}
+                    >
+                      View profile
+                    </a>
                     <button
                       className="button small"
                       aria-label={`Edit ${student.name}`}

@@ -126,7 +126,10 @@ async function mutate(
       );
     if (expected !== photoVersion(before.imageUrl))
       throw new PhotoError(409, 'Photo changed. Refresh before retrying.');
-    if (remove && request.headers.get('content-length') !== null) {
+    if (
+      remove &&
+      (request.body !== null || request.headers.has('content-length'))
+    ) {
       throw new PhotoError(
         400,
         'Photo removal does not accept a request body.'

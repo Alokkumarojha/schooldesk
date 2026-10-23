@@ -1824,14 +1824,175 @@ textarea::placeholder {
   vertical-align: middle;
 }
 
-
-.button.danger:hover { background: var(--danger-hover); }
-.theme-toggle { display: inline-flex; align-items: center; gap: 8px; }
-.theme-toggle select { width: auto; min-width: 90px; }
+.button.danger:hover {
+  background: var(--danger-hover);
+}
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-toggle select {
+  width: auto;
+  min-width: 90px;
+}
 @media (max-width: 640px) {
-  .theme-toggle > span { display: none; }
+  .theme-toggle > span {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
-  .topbar .profile { max-width: none; flex-shrink: 0; gap: 8px; }
+  .topbar .profile {
+    max-width: none;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+}
+
+/* Shared by the dashboard and profile Topbar; native modal dialogs remain
+   above this bar in the browser top layer, with background controls inert. */
+.mobile-bottom-nav {
+  display: none;
+}
+@media (max-width: 760px) {
+  :root {
+    --mobile-nav-height: calc(68px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(var(--mobile-nav-height) + 16px);
+  }
+  .shell > .main {
+    padding-bottom: var(--mobile-nav-height);
+  }
+  .mobile-bottom-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    height: var(--mobile-nav-height);
+    padding: 6px max(8px, env(safe-area-inset-right, 0px))
+      calc(6px + env(safe-area-inset-bottom, 0px))
+      max(8px, env(safe-area-inset-left, 0px));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .mobile-bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 44px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    cursor: pointer;
+  }
+  .mobile-bottom-nav button:hover {
+    background: var(--hover);
+  }
+  .mobile-bottom-nav button[aria-current] {
+    background: var(--selected);
+    color: var(--blue);
+  }
+  .mobile-bottom-nav button:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: -3px;
+  }
+  .shell .toast {
+    bottom: calc(var(--mobile-nav-height) + 16px);
+  }
+}
+
+/* Student directory: mobile card layout */
+.student-mobile-cards {
+  display: none;
+}
+
+.student-mobile-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 4%);
+}
+
+.student-mobile-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.student-mobile-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.student-mobile-details > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.student-mobile-details span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.student-mobile-details strong,
+.student-mobile-details small {
+  overflow-wrap: anywhere;
+}
+
+.student-mobile-details strong {
+  font-size: 14px;
+}
+
+.student-mobile-details small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.student-mobile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.student-mobile-profile {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .student-mobile-cards {
+    display: grid;
+    gap: 14px;
+  }
+
+  .students-panel .responsive-table {
+    display: none;
+  }
+}
+
+@media (min-width: 641px) {
+  .student-mobile-cards {
+    display: none;
+  }
 }

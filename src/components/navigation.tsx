@@ -9,6 +9,7 @@ import { Section, sections } from '@/lib/demo';
 import { Icon } from './icon';
 import { Dialog } from './ui';
 import { ThemeToggle } from './theme-toggle';
+import { MobileBottomNav } from './mobile-bottom-nav';
 
 function NavigationLinks({
   section,
@@ -209,6 +210,8 @@ export function Topbar(props: {
           </div>
         </div>
       </header>
+      <MobileBottomNav section={props.section} onNavigate={props.onNavigate}
+        onMore={() => setOpen(true)} drawerOpen={open} />
       {open && (
         <Dialog
           title="SchoolDesk"

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import './globals.css';
@@ -6,8 +6,20 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'SchoolDesk · School management',
   description: 'SchoolDesk school management workspace.',
-  icons: { icon: '/favicon.svg' },
+  applicationName: 'SchoolDesk',
+  icons: {
+    icon: '/favicon.svg',
+    apple: { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+  },
+  appleWebApp: { capable: true, title: 'SchoolDesk', statusBarStyle: 'default' },
   robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#285cdd',
 };
 
 export default function RootLayout({

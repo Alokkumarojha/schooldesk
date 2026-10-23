@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useWorkspaceRefresh } from '@/lib/use-workspace-refresh';
 import { loadClasses, type ApiClass } from '@/lib/students-client';
-import { DEMO_DATE } from '@/lib/demo';
+
 import { AttendanceRegister } from './attendance';
 import { Empty } from './ui';
 
@@ -18,34 +18,46 @@ export function AttendanceWorkspace({
 }) {
   const [classes, setClasses] = useState<ApiClass[]>([]);
   const [classId, setClassId] = useState('');
-  const [date, setDate] = useState(DEMO_DATE);
+  const [date, setDate] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const [protectedDraft, setProtectedDraft] = useState(false);
   const [sessionRevision, setSessionRevision] = useState(0);
-  const refreshOnVisit = useCallback(async (signal: AbortSignal) => {
-    setLoading(true);
-    await loadClasses(schoolId, signal)
-      .then((groups) => {
-        if (signal.aborted) return;
-        setClasses(groups);
-        setClassId((current) =>
-          groups.some((group) => group.id === current)
-            ? current
-            : (groups[0]?.id ?? '')
-        );
-        setSessionRevision((value) => value + 1);
-        setError('');
-      })
-      .catch(() => {
-        if (!signal.aborted)
-          setError('Unable to load classes. Please try again.');
-      })
-      .finally(() => {
-        if (!signal.aborted) setLoading(false);
-      });
-  }, [schoolId]);
+
+  const refreshOnVisit = useCallback(
+    async (signal: AbortSignal) => {
+      setLoading(true);
+      await loadClasses(schoolId, signal)
+        .then((groups) => {
+          if (signal.aborted) return;
+          setClasses(groups);
+          setClassId((current) =>
+            groups.some((group) => group.id === current)
+              ? current
+              : (groups[0]?.id ?? '')
+          );
+          setSessionRevision((value) => value + 1);
+          setError('');
+        })
+        .catch(() => {
+          if (!signal.aborted)
+            setError('Unable to load classes. Please try again.');
+        })
+        .finally(() => {
+          if (!signal.aborted) setLoading(false);
+        });
+    },
+    [schoolId]
+  );
   useWorkspaceRefresh(active, protectedDraft, revision, refreshOnVisit);
   return (
     <>
@@ -56,6 +68,7 @@ export function AttendanceWorkspace({
           </div>
         </section>
       )}
+
       {error && (
         <section className="panel">
           <div role="alert">
@@ -77,6 +90,7 @@ export function AttendanceWorkspace({
           </div>
         </section>
       )}
+
       {!loading && !error && !classes.length && (
         <section className="panel">
           <Empty
@@ -85,9 +99,11 @@ export function AttendanceWorkspace({
           />
         </section>
       )}
+
       <div hidden={loading || !!error}>
         {classId && (
-          <AttendanceRegister schoolId={schoolId}
+          <AttendanceRegister
+            schoolId={schoolId}
             key={`${classId}/${date}`}
             refreshRevision={sessionRevision}
             onProtectionChange={setProtectedDraft}
